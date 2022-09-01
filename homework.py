@@ -4,10 +4,15 @@ import logging
 import telegram
 import requests
 import time
+import sys
+
 # from telegram import Bot
-# from http import HTTPStatus
-# from telegram.ext import Updater, Filters, StreamHandler
+from http import HTTPStatus
+
+from telegram.ext import Updater, Filters
 from logging.handlers import RotatingFileHandler
+
+from exceptions import HTTPResponseNon, NoneNothing
 
 from dotenv import load_dotenv
 
@@ -37,26 +42,49 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
-handler = RotatingFileHandler(
-    'my_logger.log',
-    maxBytes=50000000,
-    backupCount=5
-)
+handler = logging.StreamHandler(sys.stdout)
 logger.addHandler(handler)
+
+formatter = logging.Formatter(
+    '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+handler.setFormatter(formatter)
+
 def send_message(bot, message):
-    bot.send_message(TELEGRAM_CHAT_ID, message)
+    """Отправляем сообщение в Telegram чат."""
+    try:
+        bot.send_message(TELEGRAM_CHAT_ID, message)
+        logger.info(f'В чат отправлено: {message}')
+    except telegram.error.TelegramError:
+        print('Сообщение не отправлено')
     return
 
 
 def get_api_answer(current_timestamp):
-    timestamp = 0 # current_timestamp  or int(time.time())
+    """Запрос к эндпоинту API-сервиса."""
+    timestamp = current_timestamp  or int(time.time())
     params = {'from_date': timestamp}
-    response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+    try:
+        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+        if response.status_code != HTTPStatus.OK:
+            raise HTTPResponseNon(
+                'Сайт не работает. Ошибка {response.status_code}')
+    except Exception as error:
+        logging.error(error, exc_info=True)
+
     return response.json()
 
 
 def check_response(response):
-    result = response['homeworks']
+    """Проверяем ответ API на корректность."""
+
+    result = response.get('homeworks')
+    if result == []:
+        raise NoneNothing('Пока ничего нет.')
+    
+    status = response.get('homeworks')[0]['status']
+    if status not in HOMEWORK_STATUSES:
+            raise TypeError('Нет ключа homeworks')
     return result
 
 
@@ -65,9 +93,13 @@ def parse_status(homework):
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
     
-    if homework_status in HOMEWORK_STATUSES:
-        verdict = HOMEWORK_STATUSES[homework_status]
-        return f'Есть изменения в {homework_name}". {verdict}'
+    try:
+        if homework_status in HOMEWORK_STATUSES:
+            verdict = HOMEWORK_STATUSES[homework_status]
+    except NoneNothing:
+        logger.debug('Отсутствуют в ответе новые статусы')
+
+    return f'Есть изменения в {homework_name}". {verdict}'
 
 
 def check_tokens():
@@ -79,7 +111,7 @@ def check_tokens():
     }
     for secret_cod, value in secret_cods.items():
         if not value:
-            print(f'{secret_cod} отсутствует')
+            logger.critical(f'{secret_cod} отсутствует')
             return False
     return True
 
@@ -92,7 +124,7 @@ def main():
 
     while True:
         try:
-            current_timestamp = 0 # int(time.time())
+            current_timestamp = int(time.time())
             response = get_api_answer(current_timestamp)
             homework = check_response(response)
             message = parse_status(homework[0])
@@ -102,6 +134,7 @@ def main():
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             send_message(bot, message)
+        finally:
             time.sleep(RETRY_TIME)
 
 if __name__ == '__main__':
