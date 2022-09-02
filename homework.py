@@ -1,6 +1,7 @@
 import os
 # from urllib import response
 import logging
+from turtle import home
 import telegram
 import requests
 import time
@@ -64,13 +65,10 @@ def get_api_answer(current_timestamp):
     """Запрос к эндпоинту API-сервиса."""
     timestamp = current_timestamp  or int(time.time())
     params = {'from_date': timestamp}
-    try:
-        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
-        if response.status_code != HTTPStatus.OK:
+    response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+    if response.status_code != HTTPStatus.OK:
             raise HTTPResponseNon(
                 'Сайт не работает. Ошибка {response.status_code}')
-    except Exception as error:
-        logging.error(error, exc_info=True)
 
     return response.json()
 
@@ -78,29 +76,33 @@ def get_api_answer(current_timestamp):
 def check_response(response):
     """Проверяем ответ API на корректность."""
 
-    result = response.get('homeworks')
-    if result == []:
-        raise NoneNothing('Пока ничего нет.')
+    if not isinstance(response, dict):
+        raise TypeError('Некорректный тип данных ответа.')
+
+    homeworks = response.get('homeworks')
+    if not homeworks:
+        raise KeyError('Пока ничего нет.')
     
-    status = response.get('homeworks')[0]['status']
-    if status not in HOMEWORK_STATUSES:
-            raise TypeError('Нет ключа homeworks')
-    return result
+    if not isinstance(homeworks, list):
+        raise TypeError('Некорректный тип данных домашек.')
+    return homeworks
 
 
 def parse_status(homework):
     """Информация о конкретной домашней работе, статус этой работы."""
     homework_name = homework.get('homework_name')
     homework_status = homework.get('status')
+
+    if not homework_name:
+        raise KeyError('Домашние работы не обнаружены')
     
-    try:
-        if homework_status in HOMEWORK_STATUSES:
-            verdict = HOMEWORK_STATUSES[homework_status]
-    except NoneNothing:
+    if not homework_status in HOMEWORK_STATUSES:
         logger.debug('Отсутствуют в ответе новые статусы')
+        raise NoneNothing ('Отсутствуют в ответе новые статусы')
 
-    return f'Есть изменения в {homework_name}". {verdict}'
+    verdict = HOMEWORK_STATUSES[homework_status]
 
+    return f'Изменился статус проверки работы "{homework_name}". {verdict}'
 
 def check_tokens():
     """Проверяет наличие всех кодов, паролей, ID, токенов."""
