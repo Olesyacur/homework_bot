@@ -91,7 +91,7 @@ def parse_status(homework):
     if not homework_name:
         raise KeyError('Домашние работы не обнаружены')
 
-    if not homework_status in HOMEWORK_STATUSES:
+    if homework_status not in HOMEWORK_STATUSES:
         logger.debug('Отсутствуют в ответе новые статусы')
         raise NoneNothing('Отсутствуют в ответе новые статусы')
 
