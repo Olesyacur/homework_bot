@@ -1,17 +1,11 @@
 import os
-# from urllib import response
 import logging
-from turtle import home
 import telegram
 import requests
 import time
 import sys
 
-# from telegram import Bot
 from http import HTTPStatus
-
-from telegram.ext import Updater, Filters
-from logging.handlers import RotatingFileHandler
 
 from exceptions import HTTPResponseNon, NoneNothing
 
@@ -37,7 +31,7 @@ HOMEWORK_STATUSES = {
 
 logging.basicConfig(
     level=logging.DEBUG,
-    filename='program.log', 
+    filename='program.log',
     format='%(asctime)s, %(levelname)s, %(message)s, %(name)s'
 )
 
@@ -51,6 +45,7 @@ formatter = logging.Formatter(
 )
 handler.setFormatter(formatter)
 
+
 def send_message(bot, message):
     """Отправляем сообщение в Telegram чат."""
     try:
@@ -63,26 +58,26 @@ def send_message(bot, message):
 
 def get_api_answer(current_timestamp):
     """Запрос к эндпоинту API-сервиса."""
-    timestamp = current_timestamp  or int(time.time())
+    timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
     response = requests.get(ENDPOINT, headers=HEADERS, params=params)
     if response.status_code != HTTPStatus.OK:
-            raise HTTPResponseNon(
-                'Сайт не работает. Ошибка {response.status_code}')
+        raise HTTPResponseNon(
+            'Сайт не работает. Ошибка {response.status_code}'
+        )
 
     return response.json()
 
 
 def check_response(response):
     """Проверяем ответ API на корректность."""
-
     if not isinstance(response, dict):
         raise TypeError('Некорректный тип данных ответа.')
 
     homeworks = response.get('homeworks')
     if not homeworks:
         raise KeyError('Пока ничего нет.')
-    
+
     if not isinstance(homeworks, list):
         raise TypeError('Некорректный тип данных домашек.')
     return homeworks
@@ -95,14 +90,15 @@ def parse_status(homework):
 
     if not homework_name:
         raise KeyError('Домашние работы не обнаружены')
-    
+
     if not homework_status in HOMEWORK_STATUSES:
         logger.debug('Отсутствуют в ответе новые статусы')
-        raise NoneNothing ('Отсутствуют в ответе новые статусы')
+        raise NoneNothing('Отсутствуют в ответе новые статусы')
 
     verdict = HOMEWORK_STATUSES[homework_status]
 
     return f'Изменился статус проверки работы "{homework_name}". {verdict}'
+
 
 def check_tokens():
     """Проверяет наличие всех кодов, паролей, ID, токенов."""
@@ -116,7 +112,6 @@ def check_tokens():
             logger.critical(f'{secret_cod} отсутствует')
             return False
     return True
-
 
 
 def main():
@@ -138,6 +133,7 @@ def main():
             send_message(bot, message)
         finally:
             time.sleep(RETRY_TIME)
+
 
 if __name__ == '__main__':
     main()
