@@ -1,5 +1,6 @@
 import os
 import logging
+from xmlrpc.client import SERVER_ERROR
 import telegram
 import requests
 import time
@@ -52,7 +53,9 @@ def send_message(bot, message):
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.info(f'В чат отправлено: {message}')
     except telegram.error.TelegramError:
-        print('Сообщение не отправлено')
+        logger.error('Сообщение не отправлено')
+    except SERVER_ERROR:
+        logger.error('Сеть недоступна.')
     return
 
 
@@ -60,12 +63,18 @@ def get_api_answer(current_timestamp):
     """Запрос к эндпоинту API-сервиса."""
     timestamp = current_timestamp or int(time.time())
     params = {'from_date': timestamp}
-    response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+    try:
+        response = requests.get(ENDPOINT, headers=HEADERS, params=params)
+    except Exception as error:
+        logging.error(f'Сетевые проблемы: {error}')
+        raise Exception(f'Сетевые проблемы: {error}')
     if response.status_code != HTTPStatus.OK:
+        logger.error('Сайт не работает. Ошибка {response.status_code}')
         raise HTTPResponseNon(
             'Сайт не работает. Ошибка {response.status_code}'
         )
-
+# Не совсем поняла про форматирование. Я планировала просто вывести
+#  сообщение об ошибке с указанием статуса.))
     return response.json()
 
 
@@ -77,7 +86,9 @@ def check_response(response):
     homeworks = response.get('homeworks')
     if not homeworks:
         raise KeyError('Пока ничего нет.')
-
+# Мне бы не хотелось убирать эту проверку, т.к. при не мне в чат
+#  отправляется сообщение, а если ее убрать, то пишет просто -
+#  list' object has no attribute 'get'...(
     if not isinstance(homeworks, list):
         raise TypeError('Некорректный тип данных домашек.')
     return homeworks
@@ -102,37 +113,30 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяет наличие всех кодов, паролей, ID, токенов."""
-    secret_cods = {
-        'practicum_token': PRACTICUM_TOKEN,
-        'telegram_token': TELEGRAM_TOKEN,
-        'telegram_chat_id': TELEGRAM_CHAT_ID,
-    }
-    for secret_cod, value in secret_cods.items():
-        if not value:
-            logger.critical(f'{secret_cod} отсутствует')
-            return False
-    return True
+    if all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
+        return True
 
 
 def main():
     """Основная логика работы бота."""
-    if check_tokens():
-        bot = telegram.Bot(token=TELEGRAM_TOKEN)
-
+    bot = telegram.Bot(token=TELEGRAM_TOKEN)
+    if not check_tokens():
+        logger.critical('Отсутствуют ключ(и) для выполнения программы.')
+        raise Exception('Отсутствуют ключ(и) для выполнения программы.')
     while True:
         try:
             current_timestamp = int(time.time())
-            response = get_api_answer(current_timestamp)
-            homework = check_response(response)
-            message = parse_status(homework[0])
+            response_homework = get_api_answer(current_timestamp)
+            homework = check_response(response_homework)
+            message = parse_status(homework)
             send_message(bot, message)
             time.sleep(RETRY_TIME)
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
+            logger.exception(message)
             send_message(bot, message)
-        finally:
-            time.sleep(RETRY_TIME)
+        time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
