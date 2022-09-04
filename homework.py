@@ -53,10 +53,9 @@ def send_message(bot, message):
         bot.send_message(TELEGRAM_CHAT_ID, message)
         logger.info(f'В чат отправлено: {message}')
     except telegram.error.TelegramError:
-        logger.error('Сообщение не отправлено')
+        logger.exception('Сообщение не отправлено')
     except SERVER_ERROR:
         logger.error('Сеть недоступна.')
-    return
 
 
 def get_api_answer(current_timestamp):
@@ -66,15 +65,11 @@ def get_api_answer(current_timestamp):
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=params)
     except Exception as error:
-        logging.error(f'Сетевые проблемы: {error}')
         raise Exception(f'Сетевые проблемы: {error}')
     if response.status_code != HTTPStatus.OK:
-        logger.error('Сайт не работает. Ошибка {response.status_code}')
         raise HTTPResponseNon(
-            'Сайт не работает. Ошибка {response.status_code}'
+            f'Сайт не работает. Ошибка {response.status_code}'
         )
-# Не совсем поняла про форматирование. Я планировала просто вывести
-#  сообщение об ошибке с указанием статуса.))
     return response.json()
 
 
@@ -84,11 +79,6 @@ def check_response(response):
         raise TypeError('Некорректный тип данных ответа.')
 
     homeworks = response.get('homeworks')
-    if not homeworks:
-        raise KeyError('Пока ничего нет.')
-# Мне бы не хотелось убирать эту проверку, т.к. при не мне в чат
-#  отправляется сообщение, а если ее убрать, то пишет просто -
-#  list' object has no attribute 'get'...(
     if not isinstance(homeworks, list):
         raise TypeError('Некорректный тип данных домашек.')
     return homeworks
@@ -113,8 +103,7 @@ def parse_status(homework):
 
 def check_tokens():
     """Проверяет наличие всех кодов, паролей, ID, токенов."""
-    if all([PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID]):
-        return True
+    return all((PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID,))
 
 
 def main():
@@ -122,21 +111,23 @@ def main():
     bot = telegram.Bot(token=TELEGRAM_TOKEN)
     if not check_tokens():
         logger.critical('Отсутствуют ключ(и) для выполнения программы.')
-        raise Exception('Отсутствуют ключ(и) для выполнения программы.')
+        sys.exit('Отсутствуют ключ(и) для выполнения программы.')
     while True:
         try:
             current_timestamp = int(time.time())
-            response_homework = get_api_answer(current_timestamp)
-            homework = check_response(response_homework)
-            message = parse_status(homework)
-            send_message(bot, message)
-            time.sleep(RETRY_TIME)
+            response_homeworks = get_api_answer(current_timestamp)
+            if response_homeworks:
+                for response_homework in response_homeworks:
+                    homework = check_response(response_homework)
+                    message = parse_status(homework)
+                    send_message(bot, message)
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
             logger.exception(message)
             send_message(bot, message)
-        time.sleep(RETRY_TIME)
+        finally:
+            time.sleep(RETRY_TIME)
 
 
 if __name__ == '__main__':
