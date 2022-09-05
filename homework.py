@@ -55,7 +55,7 @@ def send_message(bot, message):
     except telegram.error.TelegramError:
         logger.exception('Сообщение не отправлено')
     except SERVER_ERROR:
-        logger.error('Сеть недоступна.')
+        logger.exception('Сеть недоступна.')
 
 
 def get_api_answer(current_timestamp):
@@ -116,11 +116,10 @@ def main():
         try:
             current_timestamp = int(time.time())
             response_homeworks = get_api_answer(current_timestamp)
-            if response_homeworks:
-                for response_homework in response_homeworks:
-                    homework = check_response(response_homework)
-                    message = parse_status(homework)
-                    send_message(bot, message)
+            homeworks = check_response(response_homeworks)
+            for homework in homeworks:
+                message = parse_status(homework)
+                send_message(bot, message)
 
         except Exception as error:
             message = f'Сбой в работе программы: {error}'
