@@ -11,7 +11,10 @@ Python-telegram-bot
 
 Для запуска проекта бота необходимо получить токен к API Практикум.Домашка по
 адресу: https://oauth.yandex.ru/verification_code#access_token=y0_AgAAAAAOfSqaAAYckQAAAADY4xxHceeHbWerTrqNqg4k_plqLNOW8qg&token_type=bearer&expires_in=1719905
-
+- Клонируйте проект
+```
+git clone git@github.com:Olesyacur/homework_bot.git
+```
 - Установите и активируйте виртуальное окружение
 - Установите зависимости из файла requirements.txt
 ```
